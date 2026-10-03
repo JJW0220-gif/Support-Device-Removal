@@ -1,81 +1,150 @@
-# Cascaded Latent Diffusion for High-Resolution Chest X-ray Synthesis
+# Support Device Removal from Chest X-rays
 
-<p align="center">
-<img src=assets/intro_sample_grid.png />
-</p>
+This project removes medical support devices (tubes, lines, pacemakers) from chest X-ray images using a two-stage pipeline:
 
-This repository contains code for running and training **Cheff** - a cascaded **che**st
-X-ray latent di**ff**usion pipeline.
-The cheff pipeline consists of three cascading phases:
+1. **Segmentation** — detect and localize devices
+2. **Inpainting** — regenerate the masked regions as normal anatomical tissue
 
-1. Modeling a diffusion process in latent space
-2. Translating the latent variables into image space with a decoder
-3. Refinement and upscaling using a super-resolution diffusion process
+## Overview
 
-Phase 1 and 2 together define an LDM.
-Phase 2 and 3 are trained on MaCheX, a collection of over 650,000 chest X-rays and thus,
-build a foundational basis for our model stack.
-The first phase is task-specific. For unconditional snythesis, we train on full MaCheX
-and for report-to-chest-X-ray we use the MIMIC subset.
+```
+Original CXR (with devices)
+        ↓
+┌─────────────────────────────┐
+│  Segmentation (two models)  │
+├─────────────────────────────┤
+│  cxr-lines-and-tubes        │ → ETT, NGT, CVC, Swan-Ganz
+│  CIED                       │ → Pacemaker, biomonitor
+└─────────────────────────────┘
+        ↓
+   Combined mask
+        ↓
+┌─────────────────────────────┐
+│  Inpainting (Cheff LDM)     │
+└─────────────────────────────┘
+        ↓
+Clean CXR (devices removed)
+```
 
-<p align="center">
-<img src=assets/cheff_overview.png />
-</p>
+## Pipeline Components
 
-## How to use Cheff?
+### 1. Segmentation
 
-Please have a look into our [tutorial notebook](notebooks/01_cheff.ipynb).
+| Model | Source | Covers |
+|---|---|---|
+| [cxr-lines-and-tubes](https://huggingface.co/ianpan/cxr-lines-and-tubes) | EfficientNet-B1 + U-Net | ETT, NGT, CVC, Swan-Ganz lines & tips |
+| [CIED](https://github.com/Cardio-AI/cied) | ResNet-50 + U-Net (fastai) | Pacemaker / biomonitor body |
 
+Run each:
+
+```bash
+# Tubes/lines segmentation
+python scripts/cxr_lines_tubes_segmentation.py image.jpg --out outputs/cxr_seg
+
+# Pacemaker segmentation
+python scripts/cied_pacemaker_segmentation.py image.jpg --out outputs/cied_seg
+
+# Combine both masks (union)
+python scripts/combine_masks.py
+```
+
+Output structure per image:
+
+```
+outputs/combined_seg/<image_name>/
+├── original.png       # original CXR
+├── mask.png           # combined binary mask
+├── original_256.png   # 256x256 for inpainting
+├── mask_256.png       # 256x256 for inpainting
+└── result.json        # metadata
+```
+
+### 2. Inpainting
+
+Uses **Cheff** latent diffusion model to regenerate masked regions:
+
+```bash
+# Unconditional
+python scripts/batch_inpainting.py --n-samples 4 --sampling-steps 100
+
+# Text-guided
+python scripts/batch_inpainting.py \
+    --text-guided \
+    --prompt "chest x-ray without any medical devices or tubes" \
+    --n-samples 4
+```
+
+Output:
+
+```
+outputs/inpainted/<image_name>/
+├── original.png
+├── mask.png
+├── inpainted_0.png    # generated samples
+├── inpainted_1.png
+├── ...
+└── comparison.png     # side-by-side grid
+```
 
 ## Models
 
-We provide the weights for 5 models:
+| Model | Purpose | Download |
+|---|---|---|
+| cheff_autoencoder.pt | VAE for latent space | [link](https://syncandshare.lrz.de/getlink/fiQ6wTe7K7otQzyifNh9av/cheff_autoencoder.pt) |
+| cheff_diff_uncond.pt | Unconditional LDM | [link](https://syncandshare.lrz.de/getlink/fiE9pKbK38wzEvBrBCk95W/cheff_diff_uncond.pt) |
+| cheff_diff_t2i.pt | Text-conditioned LDM | [link](https://syncandshare.lrz.de/getlink/fi4R87B3cEWgSx4Wivyizb/cheff_diff_t2i.pt) |
+| cxr-lines-and-tubes | Tubes/lines segmentation | [HF](https://huggingface.co/ianpan/cxr-lines-and-tubes) |
+| CIED segmentation.pkl | Pacemaker segmentation | [Zenodo](https://zenodo.org/record/10955502) |
 
-- Chest X-ray autoencoder: [Click!](https://syncandshare.lrz.de/getlink/fiQ6wTe7K7otQzyifNh9av/cheff_autoencoder.pt)
-- Chest X-ray unconditioned semantic diffusion model: [Click!](https://syncandshare.lrz.de/getlink/fiE9pKbK38wzEvBrBCk95W/cheff_diff_uncond.pt)
-- Chest X-ray report-conditioned semantic diffusion model: [Click!](https://syncandshare.lrz.de/getlink/fi4R87B3cEWgSx4Wivyizb/cheff_diff_t2i.pt)
-- Chest X-ray super-resolution diffusion model base: [Click!](https://syncandshare.lrz.de/getlink/fiovQdSGXiTuWQ7scu7FA/cheff_sr_base.pt)
-- Chest X-ray super-resolution diffusion model finetuned: [Click!](https://syncandshare.lrz.de/getlink/fiHM4uAfy7uxcfBXkefySJ/cheff_sr_fine.pt)
+Place Cheff weights in `trained_models/` and CIED weights in `cied/models/`.
 
-The [tutorial notebook](notebooks/01_cheff.ipynb) assumes that downloaded models are
-placed in `trained_models`.
+## Setup
 
-## Training
+```bash
+conda env create -f environment.yml
+conda activate Cheff
 
-Our codebase builds heavily on the classic LDM repository. Thus, we share the same
-interface with a few adaptions.
-A conda environment file for installing necessary dependencies is `environment.yml`.
-For a pip-only install use `requirements.txt`.
-The full config files are located in `configs`. After adjusting the paths, the training
-can be started as follows:
-
-```shell
-python scripts/01_train_ldm.py -b <path/to/config.yml> -t --no-test
+# For GPU support (adjust CUDA version as needed)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 ```
-
-### Training the Super-Resolution Model
-
-The training procedure for reproducing `CheffSR` is located in an [extra repository](https://github.com/saiboxx/diffusion-pytorch).
-You will find a [script](https://github.com/saiboxx/diffusion-pytorch/blob/main/scripts/03_train_sr3_ddp.py) that contains the 
-necessary configuration and routine.
-
-
-## Acknowledgements
-
-This code builds heavily on the implementation of LDMs and DDPMs from CompVis:
-[Repository here](https://github.com/CompVis/latent-diffusion).
-
 
 ## Citation
 
-If you use **Cheff** or our repository in your research, please cite our paper *Cascaded Latent Diffusion Models for High-Resolution Chest X-ray Synthesis*:
+If you use this project, please cite the original works:
 
+**Cheff:**
 ```
 @inproceedings{weber2023cascaded,
   title={Cascaded Latent Diffusion Models for High-Resolution Chest X-ray Synthesis},
   author={Weber, Tobias and Ingrisch, Michael and Bischl, Bernd and R{\"u}gamer, David},
-  booktitle={Advances in Knowledge Discovery and Data Mining: 27th Pacific-Asia Conference, PAKDD 2023},
-  year={2023},
-  organization={Springer}
+  booktitle={PAKDD 2023},
+  year={2023}
 }
 ```
+
+**cxr-lines-and-tubes:**
+```
+@misc{pan2024cxrlines,
+  author={Pan, Ian},
+  title={CXR Lines and Tubes},
+  howpublished={\url{https://huggingface.co/ianpan/cxr-lines-and-tubes}},
+  year={2024}
+}
+```
+
+**CIED:**
+```
+@article{busch2024cardiac,
+  title={Open Access Data and Deep Learning for Cardiac Device Identification},
+  author={Busch, Felix and Bressem, Keno K. and others},
+  journal={Radiology: Artificial Intelligence},
+  year={2024}
+}
+```
+
+## Acknowledgements
+
+- [Cheff](https://github.com/saiboxx/chexray-diffusion) — latent diffusion backbone
+- [cxr-lines-and-tubes](https://github.com/i-pan/cxr-lines-and-tubes) — tubes/lines segmentation
+- [CIED](https://github.com/Cardio-AI/cied) — cardiac device segmentation
+- [CompVis/latent-diffusion](https://github.com/CompVis/latent-diffusion) — base LDM implementation

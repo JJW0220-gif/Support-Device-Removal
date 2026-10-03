@@ -1,0 +1,16 @@
+{
+  "image": "/mnt/c/Users/\u738b\u653f\u5091/DeCoDEx/datasets/device/imgs/train_patient00001_study1_view1_frontal.jpg",
+  "pacemaker_detected": true,
+  "bbox": {
+    "min_row": 457,
+    "min_col": 0,
+    "max_row": 540,
+    "max_col": 38
+  },
+  "size": {
+    "height": 83,
+    "width": 38
+  },
+  "area_pixels": 3675,
+  "area_percent": 0.3504753112792969
+}

@@ -1,21 +1,29 @@
-torch==1.11
-torchvision
-pytorch-lightning==1.6
+# Core dependencies
 opencv-python-headless
 numba
 numpy
 albumentations
-pudb
 imageio
 imageio-ffmpeg
 omegaconf
-test-tube
-streamlit
 einops
-torch-fidelity
 transformers
-wandb
 kornia
+timm
+pycocotools
+
+# Optional: for training and visualization
+pytorch-lightning>=2.0
+streamlit
+wandb
+pudb
+
+# PyTorch (install separately for GPU support)
+# For RTX 5060 Ti (sm_120): pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128
+# For CPU only: pip install torch torchvision
+
+
+# Local packages
 -e .
 -e "git+https://github.com/CompVis/taming-transformers.git@master#egg=taming-transformers"
 -e "git+https://github.com/openai/CLIP.git@main#egg=clip"

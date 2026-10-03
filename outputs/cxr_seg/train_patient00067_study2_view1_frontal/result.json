@@ -1,0 +1,19 @@
+{
+  "presence": {
+    "ETT": 0.0247802734375,
+    "NGT": 0.023681640625,
+    "CVC": 0.859375,
+    "Swan Ganz": 0.00445556640625
+  },
+  "image": "/mnt/c/Users/\u738b\u653f\u5091/DeCoDEx/datasets/device/imgs/train_patient00067_study2_view1_frontal.jpg",
+  "device_folds": [
+    3
+  ],
+  "carina_xy": [
+    1231.291015625,
+    846.978515625
+  ],
+  "carina_folds": [
+    1
+  ]
+}

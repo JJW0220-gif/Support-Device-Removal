@@ -224,21 +224,27 @@ class CheffLDMT2I(CheffLDM):
             sampling_steps: int = 100,
             eta: float = 1.0,
             decode: bool = True,
-            conditioning: str = '',
+            conditioning: str | list[str] = '',
             *args,
             **kwargs
     ) -> Tensor:
-        assert target_img.shape[0] == 1, 'Method implemented only for batch size = 1.'
+        batch_size = target_img.shape[0]
 
         # Encode original image via AE
         target_enc = self.model.encode_first_stage(target_img).mode()
+
+        # Handle batch conditioning
+        if isinstance(conditioning, str):
+            # Single prompt: replicate for batch
+            conditioning = [conditioning] * batch_size
+
         conditioning = self.model.get_learned_conditioning(conditioning)
 
         ddim = DDIMSampler(self.model)
         samples, _ = ddim.sample(
             sampling_steps,
             conditioning=conditioning,
-            batch_size=1,
+            batch_size=batch_size,
             shape=self.sample_shape,
             eta=eta,
             verbose=False,

@@ -1,0 +1,7 @@
+{
+  "image": "train_patient00011_study11_view1_frontal",
+  "cied_pixels": 25758,
+  "cxr_pixels": 48834,
+  "combined_pixels": 74592,
+  "overlap_pixels": 0
+}
